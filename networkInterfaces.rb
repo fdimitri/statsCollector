@@ -192,6 +192,9 @@ def getInterfaces
       dsInfo = {:vendor => "USB", :device => "USB"}
     elsif (type == "virt")
       dsInfo = {:vendor => "VIRT", :device => "VIRT"}
+    elsif (type == "virtio")
+      dsInfo = {:vendor => "VirtIO", :device => "VirtIO-NET"}
+      # We should check #{device}/device/driver/module/drivers/ for virtio
     end
     
     
