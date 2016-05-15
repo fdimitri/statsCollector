@@ -1,4 +1,5 @@
 require 'yaml'
+require 'awesome_print'
 
 @netDeviceFlags = {
   "UP" => 0x1,
@@ -214,9 +215,10 @@ def getInterfaces
   interfaceList
 end
 
-loadPCIFile("/usr/share/hwdata/pci.ids")
+loadPCIFile("/usr/share/misc/pci.ids")
+#loadPCIFile("/usr/share/hwdata/pci.ids")
 
-puts YAML.dump(getInterfaces())
+ap getInterfaces()
 #puts YAML.dump(@pciDB)
 
 
