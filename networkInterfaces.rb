@@ -145,6 +145,11 @@ class LinuxSysNet
       # /dormant -- {0,1} 0 = not Dormant, 1 = Dormant, ie needs 802.1x auth
       thisInterface = {}
       parseList = {
+        :driverName => {
+          :action => 'readLink',
+          :location => '/device/driver',
+          :default => false,
+        },
         :moduleName => {
           :action => 'readLink',
           :location => '/device/driver/module',
@@ -185,6 +190,7 @@ class LinuxSysNet
       parseList.each do |k, v|
         case (v[:action])
         when 'readLink'
+	puts "Checking File.exists? #{device} #{v[:location]}"
           if (File.exists?(device + v[:location]))
             thisInterface[k] = File.basename(File.readlink(device + v[:location]))
           else
@@ -210,11 +216,10 @@ class LinuxSysNet
         else
           puts "Unhandled Directive: #{v[:action]}"
           raise.MyException.new("Unhandled directive #{v[:action]}")
-
         end
-
-
       end
+	puts "New Collection Data:"
+	ap thisInterface
       # Check to see if there's a kernel module associated with this interface
       moduleLink = "#{device}/device/driver/module"
       moduleName = "none"
