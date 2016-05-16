@@ -128,6 +128,13 @@ class LinuxSysNet
     return(rVal)
   end
 
+	def parseDir_isBridgeDevice(device, opts) 
+		if (File.exists?(device + opts[:location]))
+			return true
+		end
+		return false	
+	end
+
   def getInterfaces
     # Check https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-class-net for more info
     sysDir = "/sys/class/net"
@@ -190,7 +197,7 @@ class LinuxSysNet
       parseList.each do |k, v|
         case (v[:action])
         when 'readLink'
-	puts "Checking File.exists? #{device} #{v[:location]}"
+	puts "Checking File.exists? #{device}#{v[:location]}"
           if (File.exists?(device + v[:location]))
             thisInterface[k] = File.basename(File.readlink(device + v[:location]))
           else
@@ -205,11 +212,13 @@ class LinuxSysNet
             puts "NYI"
           end
         when 'parseDirectory'
-          if (self.respond_to?('parseDir_#{k}'))
-            thisInterface[k] = self.send("parseDir_#{k}", v);
+	  callFunction = 'parseDir_' + k.to_s
+          if (self.respond_to?(callFunction))
+            thisInterface[k] = self.send(callFunction, device, v);
           else
-            #raise.MyException.new("Unhandled fileParse #{v[:action]}")
+            #raise.MyException.new("Unhandled dirParse #{v[:action]}")
             puts "NYI"
+	    puts YAML.dump(callFunction)
           end
         when 'checkFlagsSimple'
           puts "NYI"
@@ -323,9 +332,15 @@ class LinuxSysNet
 
 end
 
-
 lsnOpts = {
-  :pciLocation => "/usr/share/misc/pci.ids"
 }
+
+pciIDLocations = [ "/usr/share/hwdata/pci.ids", "/usr/share/misc/pci.ids" ]
+pciIDLocations.each do |val|
+	if (File.exists?(val))
+		lsnOpts[:pciLocation] = val
+		break
+	end
+end
 nc = LinuxSysNet.new(lsnOpts)
 ap nc.getInterfaces()
