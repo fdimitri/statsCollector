@@ -135,7 +135,6 @@ class LinuxSysNet
       type = "virt"
     end
 
-
     devInfo = {:bus => type}
 
     if (type == "pci")
@@ -151,28 +150,41 @@ class LinuxSysNet
       dsInfo = {:vendor => "VirtIO", :device => "VirtIO-NET"}
       # We should check #{device}/device/driver/module/drivers/ for virtio
     end
-    return {:action => :mergeSimple, :data => dsInfo}
+    return({:action => :mergeSimple, :data => dsInfo})
   end
 
+  # Check to see if the device is in a bridge
+  #      bridgeLink = "#{device}/brport/bridge"
+  #      if (File.exists?(bridgeLink))
+  #        bridgeDevice = File.basename(File.readlink(bridgeLink))
+  #      else
+  #        bridgeDevice = false
+  #      end
+
   def readLink_Generic(device, opts)
+    if (opts.has_key?(:default))
+      default = opts[:default]
+    else
+      default = 'Unknown'
+    end
     if (File.exists?(device + opts[:location]))
       k = File.basename(File.readlink(device + opts[:location]))
     else
-      k = opts[:default]
+      k = default
     end
-    return k
+    return(k)
   end
 
   def dirExists_Generic(device, opts)
     if (File.exists?(device + opts[:location]))
-      return true
+      return(true)
     end
-    return false
+    return(false)
   end
 
   def parseDir_xferStats(device, opts)
     if (!(File.exists?(device + opts[:location])))
-      return false
+      return(false)
     end
 
     # Initialize counters hash
@@ -208,7 +220,17 @@ class LinuxSysNet
         end
       end
     end
-    return counters
+    return(counters)
+  end
+
+  def readLink_moduleName(device, opts)
+    # Check to see if there's a kernel module associated with this interface
+    moduleLink = "#{device}/device/driver/module"
+    moduleName = "none"
+    if (File.exists?(moduleLink))
+      moduleName = File.basename(File.readlink(moduleLink))
+    end
+    return(moduleName)
   end
 
   def parseFile_netType(device, opts)
@@ -227,15 +249,15 @@ class LinuxSysNet
     return({:action => :mergeEach, :data => rData})
   end
 
-  def readLink_bridgeParent(device, opts)
-    bridgeLink = device + opts[:location]
-    if (File.exists?(bridgeLink))
-      bridgeDevice = File.basename(File.readlink(bridgeLink))
-    else
-      bridgeDevice = false
-    end
-    return bridgeDevice
-  end
+  #def readLink_bridgeParent(device, opts)
+    #bridgeLink = device + opts[:location]
+    #if (File.exists?(bridgeLink))
+      #bridgeDevice = File.basename(File.readlink(bridgeLink))
+    #else
+      #bridgeDevice = false
+    #end
+    #return bridgeDevice
+  #end
 
 
   def getInterfaces
@@ -299,6 +321,7 @@ class LinuxSysNet
         :isBridgeDevice => {
           :action => 'dirExists',
           :location => '/bridge',
+          :default => 'false',
         }
       }
 
@@ -355,22 +378,7 @@ class LinuxSysNet
           raise.MyException.new("Unhandled directive #{v[:action]}")
         end
       end
-      puts "New Collection Data:"
-      ap thisInterface
-      # Check to see if there's a kernel module associated with this interface
-      moduleLink = "#{device}/device/driver/module"
-      moduleName = "none"
-      if (File.exists?(moduleLink))
-        moduleName = File.basename(File.readlink(moduleLink))
-      end
 
-      # Check to see if the device is in a bridge
-      #      bridgeLink = "#{device}/brport/bridge"
-      #      if (File.exists?(bridgeLink))
-      #        bridgeDevice = File.basename(File.readlink(bridgeLink))
-      #      else
-      #        bridgeDevice = false
-      #      end
 
 
 
@@ -384,7 +392,7 @@ class LinuxSysNet
       #        :netType => netType,
       #        :flagString => flagString,
       #      }
-      interfaceList << {device => thisInterface}
+      interfaceList << {deviceName => thisInterface}
     end
     interfaceList
   end
