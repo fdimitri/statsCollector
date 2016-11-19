@@ -244,7 +244,7 @@ class LinuxSysNet
       return(false)
     end
     begin
-      res = File.read(device + opts[:location]))
+      res = File.read(device + opts[:location])
     rescue
       res = 'NA'
     end
