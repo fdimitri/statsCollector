@@ -366,6 +366,10 @@ class LinuxSysNet
             thisInterface[k] = readLink_Generic(device, v)
           end
         when 'parseFile'
+          if (!File.exists?(device + v[:location]))
+            puts "File did not exist for parseFile!"
+            next
+          end
           callFunction = 'parseFile_' + k.to_s
           if (self.respond_to?(callFunction))
             res = self.send(callFunction, device, v)
