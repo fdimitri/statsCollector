@@ -179,8 +179,22 @@ class LinuxSysNet
     return counters
   end
 
-  def readLink_bridgeParent(device, opts)
+  def parseFile_netType(device, opts)
+    # Get the device flags and check them against our device flag list
+    # Device list is a partial of "include/uapi/linux/if_arp.h"
+    netType = @netTypes.key(File.read("#{device}/#{opts[:location]}").to_i)
+    flags = Integer(File.read("#{device}/flags"))
+    flagList = []
+    @netDeviceFlags.each do |desc, flag|
+      if ((flags & flag) == flag)
+        flagList << desc
+      end
+    end
+    flagString = flagList.join(" ")
+    return({:flagString => flagString, :flagValue => flags})
+  end
 
+  def readLink_bridgeParent(device, opts)
     bridgeLink = device + opts[:location]
     if (File.exists?(bridgeLink))
       bridgeDevice = File.basename(File.readlink(bridgeLink))
@@ -224,7 +238,6 @@ class LinuxSysNet
           :default => false,
         },
         :netType => {
-          :device => "VIRT",
           :action => 'parseFile',
           :location => '/type',
           :default => false,
@@ -264,6 +277,11 @@ class LinuxSysNet
         when 'parseFile'
           callFunction = 'parseFile_' + k.to_s
           if (self.respond_to?(callFunction))
+            res = self.send(callFunction, device, v);
+            if (res.is_a?(Hash))
+              res.each do |k,v|
+                thisInterface[k] = v
+              end
             thisInterface[k] = self.send(callFunction, device, v);
           else
             #raise.MyException.new("Unhandled fileParse #{v[:action]}")
@@ -310,17 +328,6 @@ class LinuxSysNet
       #        bridgeDevice = false
       #      end
 
-      # Get the device flags and check them against our device flag list
-      # Device list is a partial of "include/uapi/linux/if_arp.h"
-      netType = @netTypes.key(File.read("#{device}/type").to_i)
-      flags = Integer(File.read("#{device}/flags"))
-      flagList = []
-      @netDeviceFlags.each do |desc, flag|
-        if ((flags & flag) == flag)
-          flagList << desc
-        end
-      end
-      flagString = flagList.join(" ")
 
       # This is kind of a nasty way to define the hash, the lower functions
       #  should actually create the lower level hashes as needed. On the other
