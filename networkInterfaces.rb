@@ -384,8 +384,8 @@ class LinuxSysNet
       #        :netType => netType,
       #        :flagString => flagString,
       #      }
+      interfaceList << {device => thisInterface}
     end
-    interfaceList << {device => thisInterface}
   end
 end
 
