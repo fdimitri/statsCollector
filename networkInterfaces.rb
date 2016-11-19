@@ -368,7 +368,7 @@ class LinuxSysNet
         when 'parseFile'
           if (!File.exists?(device + v[:location]))
             puts "File did not exist for parseFile!"
-            next
+            break
           end
           callFunction = 'parseFile_' + k.to_s
           if (self.respond_to?(callFunction))
