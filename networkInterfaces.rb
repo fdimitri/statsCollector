@@ -229,14 +229,14 @@ class LinuxSysNet
     if (!File.exists?(device + opts[:location]))
       return(false)
     end
-    return(File.read(device + opts[:location]).to_i)
+    return(File.read(device + opts[:location]).strip.to_i)
   end
 
   def parseFile_OperState(device, opts)
     if (!File.exists?(device + opts[:location]))
       return(false)
     end
-    return(File.read(device + opts[:location]))
+    return(File.read(device + opts[:location]).strip)
   end
 
   def parseFile_LinkSpeed(device, opts)
@@ -244,7 +244,7 @@ class LinuxSysNet
       return(false)
     end
     begin
-      res = File.read(device + opts[:location])
+      res = File.read(device + opts[:location]).strip
     rescue
       res = 'NA'
     end
