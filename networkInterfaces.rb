@@ -126,16 +126,16 @@ class LinuxSysNet
     end
     return(rVal)
   end
-  # Get PCI device Vendor + DeviceID if it exists
-  if (File.exists?("#{device}/device/subsystem"))
-    type = File.basename(File.readlink("#{device}/device/subsystem"))
-  else
-    type = "virt"
-  end
 
   def parseFile_vendorInfo(device, opts)
     # Get USB device Vendor + DeviceID is NYI
     devInfo = {:bus => type}
+    # Get PCI device Vendor + DeviceID if it exists
+    if (File.exists?("#{device}/device/subsystem"))
+      type = File.basename(File.readlink("#{device}/device/subsystem"))
+    else
+      type = "virt"
+    end
     if (type == "pci")
       pciVendor = File.read("#{device}/device/vendor").strip
       pciDevice = File.read("#{device}/device/device").strip
