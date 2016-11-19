@@ -126,6 +126,30 @@ class LinuxSysNet
     end
     return(rVal)
   end
+  # Get PCI device Vendor + DeviceID if it exists
+  if (File.exists?("#{device}/device/subsystem"))
+    type = File.basename(File.readlink("#{device}/device/subsystem"))
+  else
+    type = "virt"
+  end
+
+  def parseFile_vendorInfo(device, opts)
+    # Get USB device Vendor + DeviceID is NYI
+    devInfo = {:bus => type}
+    if (type == "pci")
+      pciVendor = File.read("#{device}/device/vendor").strip
+      pciDevice = File.read("#{device}/device/device").strip
+      dsInfo = getPCIInfo(pciVendor, pciDevice)
+    elsif (type == "usb")
+      dsInfo = {:vendor => "USB", :device => "USB"}
+    elsif (type == "virt")
+      dsInfo = {:vendor => "VIRT", :device => "VIRT"}
+    elsif (type == "virtio")
+      dsInfo = {:vendor => "VirtIO", :device => "VirtIO-NET"}
+      # We should check #{device}/device/driver/module/drivers/ for virtio
+    end
+    return {:action => :mergeSimple, :data => dsInfo}
+  end
 
   def readLink_Generic(device, opts)
     if (File.exists?(device + opts[:location]))
@@ -147,8 +171,13 @@ class LinuxSysNet
     if (!(File.exists?(device + opts[:location])))
       return false
     end
-    #Initialize counters hash
+
+    # Initialize counters hash
+    # This is kind of a nasty way to define the hash, the lower functions
+    #  should actually create the lower level hashes as needed. On the other
+    #  hand, it does give us atleast an empty hash if there are no counters..
     counters = {'RX' => { 'errors' => { }}, 'TX' => { 'errors' => { }}}
+
     # Read all the statistics files and return them, do some trimming
     Dir.glob(device + opts[:location] + '*') do |statsc|
       newID = File.basename(statsc).gsub("_"," ")
@@ -191,7 +220,8 @@ class LinuxSysNet
       end
     end
     flagString = flagList.join(" ")
-    return({:flagString => flagString, :flagValue => flags})
+    rData = {:flagString => flagString, :flagValue => flags}
+    return({:action => :mergeEach, :data => rData})
   end
 
   def readLink_bridgeParent(device, opts)
@@ -222,6 +252,11 @@ class LinuxSysNet
       # /dormant -- {0,1} 0 = not Dormant, 1 = Dormant, ie needs 802.1x auth
       thisInterface = {}
       parseList = {
+        :vendorInfo => {
+          :action => 'parseFile',
+          :location => '/device/vendor',
+          :default => false,
+        },
         :driverName => {
           :action => 'readLink',
           :location => '/device/driver',
@@ -279,7 +314,11 @@ class LinuxSysNet
           if (self.respond_to?(callFunction))
             res = self.send(callFunction, device, v);
             if (res.is_a?(Hash))
-              res.each do |k,v|
+              if (res[:action] == :mergeEach)
+                res.each do |k,v|
+                  thisInterface[k] = v
+                end
+              elsif (res[:action] == :mergeSimple)
                 thisInterface[k] = v
               end
             else
@@ -331,36 +370,7 @@ class LinuxSysNet
       #      end
 
 
-      # This is kind of a nasty way to define the hash, the lower functions
-      #  should actually create the lower level hashes as needed. On the other
-      #  hand, it does give us atleast an empty hash if there are no counters..
 
-      # Get PCI device Vendor + DeviceID if it exists
-      if (File.exists?("#{device}/device/subsystem"))
-        type = File.basename(File.readlink("#{device}/device/subsystem"))
-      else
-        type = "virt"
-      end
-      # Get USB device Vendor + DeviceID..
-      # NYI
-
-      devInfo = {:bus => type}
-
-      if (type == "pci")
-        pciVendor = File.read("#{device}/device/vendor").strip
-        pciDevice = File.read("#{device}/device/device").strip
-        dsInfo = getPCIInfo(pciVendor, pciDevice)
-      elsif (type == "usb")
-        dsInfo = {:vendor => "USB", :device => "USB"}
-      elsif (type == "virt")
-        dsInfo = {:vendor => "VIRT", :device => "VIRT"}
-      elsif (type == "virtio")
-        dsInfo = {:vendor => "VirtIO", :device => "VirtIO-NET"}
-        # We should check #{device}/device/driver/module/drivers/ for virtio
-      end
-
-
-      devInfo.merge!(dsInfo)
 
       # Create hash and add to array
       #	interfaceList << thisInterface
@@ -374,7 +384,6 @@ class LinuxSysNet
     end
     interfaceList
   end
-
 end
 
 # Define the options we'll pass to LinuxSysNet.new()
