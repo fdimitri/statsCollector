@@ -322,7 +322,7 @@ class LinuxSysNet
                   thisInterface[k] = v
                 end
               elsif (res[:action] == :mergeSimple)
-                thisInterface[k] = v
+                thisInterface[k] = res
               end
             else
               thisInterface[k] = res
