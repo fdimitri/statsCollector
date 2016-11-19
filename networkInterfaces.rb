@@ -242,9 +242,11 @@ class LinuxSysNet
   end
 
   def checkFlagsSimple(device, opts, interface)
-    opts[:flags].each do |k,v|
-      if (k == :forceTrueWithOr && (interface[:flagValue] & v == v))
-        return(true)
+    opts[:flags].each do |f|
+      f.each do |k,v|
+        if (k == :forceTrueWithOr && (interface[:flagValue] & v == v))
+          return(true)
+        end
       end
     end
     return(false)
@@ -304,9 +306,9 @@ class LinuxSysNet
         },
         :isLoopback => {
           :action => 'checkFlagsSimple',
-          :flags => {
-            :forceTrueWithOr => @netDeviceFlags["LOOPBACK"]
-          },
+          :flags => [
+            {:forceTrueWithOr => @netDeviceFlags["LOOPBACK"]},
+          ],
           :default => false,
         },
         :isBridgeDevice => {
