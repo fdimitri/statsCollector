@@ -386,6 +386,7 @@ class LinuxSysNet
       #      }
       interfaceList << {device => thisInterface}
     end
+    interfaceList
   end
 end
 
