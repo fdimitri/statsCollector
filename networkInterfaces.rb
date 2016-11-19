@@ -232,6 +232,21 @@ class LinuxSysNet
     return(File.read(device + opts[:location]).to_i)
   end
 
+  def parseFile_OperState(device, opts)
+    if (!File.exists?(device + opts[:location]))
+      return(false)
+    end
+    return(File.read(device + opts[:location]))
+  end
+
+  def parseFile_LinkSpeed(device, opts)
+    if (!File.exists?(device + opts[:location]))
+      return(false)
+    end
+    return(File.read(device + opts[:location]))
+  end
+
+
   def parseFile_netType(device, opts)
     # Get the device flags and check them against our device flag list
     # Device list is a partial of "include/uapi/linux/if_arp.h"
@@ -292,19 +307,10 @@ class LinuxSysNet
           :location => '/device/driver/module',
           :default => false,
         },
-        :bridgeParent => {
-          :action => 'readLink',
-          :location => '/brport/bridge',
-          :default => false,
-        },
         :netType => {
           :action => 'parseFile',
           :location => '/type',
           :default => false,
-        },
-        :xferStats => {
-          :action => 'parseDirectory',
-          :location => '/statistics/',
         },
         :subSystem => {
           :action => 'readLink',
@@ -327,6 +333,25 @@ class LinuxSysNet
           :action => 'parseFile',
           :location => '/mtu',
           :default => false,
+        },
+        :OperState => {
+          :action => 'parseFile',
+          :location => '/operstate',
+          :default => 'unknown',
+        },
+        :LinkSpeed => {
+          :action => 'parseFile',
+          :location => '/speed',
+          :default => 0,
+        }
+        :bridgeParent => {
+          :action => 'readLink',
+          :location => '/brport/bridge',
+          :default => false,
+        },
+        :xferStats => {
+          :action => 'parseDirectory',
+          :location => '/statistics/',
         },
       }
 
