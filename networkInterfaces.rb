@@ -243,7 +243,12 @@ class LinuxSysNet
     if (!File.exists?(device + opts[:location]))
       return(false)
     end
-    return(File.read(device + opts[:location]))
+    begin
+      res = File.read(device + opts[:location]))
+    rescue
+      res = 'NA'
+    end
+    return(res)
   end
 
 
@@ -367,7 +372,6 @@ class LinuxSysNet
           end
         when 'parseFile'
           if (!File.exists?(device + v[:location]))
-            puts "File did not exist for parseFile!"
             break
           end
           callFunction = 'parseFile_' + k.to_s
