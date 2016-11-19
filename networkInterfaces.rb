@@ -126,70 +126,70 @@ class LinuxSysNet
     end
     return(rVal)
   end
-	def readLink_Generic(device, opts)
-          if (File.exists?(device + opts[:location]))
-            k = File.basename(File.readlink(device + opts[:location]))
-          else
-            k = opts[:default]
-          end
-	  return k
-	end
 
-	def parseDir_isBridgeDevice(device, opts) 
-		if (File.exists?(device + opts[:location]))
-			return true
-		end
-		return false
-	end
+  def readLink_Generic(device, opts)
+    if (File.exists?(device + opts[:location]))
+      k = File.basename(File.readlink(device + opts[:location]))
+    else
+      k = opts[:default]
+    end
+    return k
+  end
 
-	def parseDir_xferStats(device, opts)
-		if (!(File.exists?(device + opts[:location])))
-			return false
-		end
-      counters = {'RX' => { 'errors' => { }}, 'TX' => { 'errors' => { }}}
+  def dirExists_Generic(device, opts)
+    if (File.exists?(device + opts[:location]))
+      return true
+    end
+    return false
+  end
 
-      # Read all the statistics files and return them, do some trimming
-      Dir.glob(device + opts[:location] + '*') do |statsc|
-        newID = File.basename(statsc).gsub("_"," ")
-        inData = File.read(statsc).strip.to_i
-        priCategory = false
-        if (newID.match(/errors|dropped/))
-          #newID.gsub!("errors", "")
-          subCategory = 'errors'
-        end
+  def parseDir_xferStats(device, opts)
+    if (!(File.exists?(device + opts[:location])))
+      return false
+    end
+    #Initialize counters hash
+    counters = {'RX' => { 'errors' => { }}, 'TX' => { 'errors' => { }}}
+    # Read all the statistics files and return them, do some trimming
+    Dir.glob(device + opts[:location] + '*') do |statsc|
+      newID = File.basename(statsc).gsub("_"," ")
+      inData = File.read(statsc).strip.to_i
+      priCategory = false
+      if (newID.match(/errors|dropped/))
+        #newID.gsub!("errors", "")
+        subCategory = 'errors'
+      end
 
-        if (newID.match(/rx\s/))
-          newID.gsub!("rx ","").capitalize!
-          priCategory = 'RX'
-        elsif (newID.match(/tx/))
-          newID.gsub!("tx ","").capitalize!
-          priCategory = 'TX'
+      if (newID.match(/rx\s/))
+        newID.gsub!("rx ","").capitalize!
+        priCategory = 'RX'
+      elsif (newID.match(/tx/))
+        newID.gsub!("tx ","").capitalize!
+        priCategory = 'TX'
+      else
+        counters[newID.capitalize!] = inData
+      end
+      if (priCategory)
+        if (subCategory)
+          counters[priCategory][subCategory][newID] = inData
         else
-          counters[newID.capitalize!] = inData
-        end
-        if (priCategory)
-          if (subCategory)
-            counters[priCategory][subCategory][newID] = inData
-          else
-            counters[priCategory][newID] = inData
-          end
+          counters[priCategory][newID] = inData
         end
       end
-	return counters
-				
-	end
+    end
+    return counters
+  end
 
-	def readLink_bridgeParent(device, opts)
+  def readLink_bridgeParent(device, opts)
 
-		bridgeLink = device + opts[:location]
-		if (File.exists?(bridgeLink))
-			bridgeDevice = File.basename(File.readlink(bridgeLink))
-		else
-			bridgeDevice = false
-		end
-		return bridgeDevice
-	end
-			
+    bridgeLink = device + opts[:location]
+    if (File.exists?(bridgeLink))
+      bridgeDevice = File.basename(File.readlink(bridgeLink))
+    else
+      bridgeDevice = false
+    end
+    return bridgeDevice
+  end
+
 
   def getInterfaces
     # Check https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-class-net for more info
@@ -246,7 +246,7 @@ class LinuxSysNet
           :default => false,
         },
         :isBridgeDevice => {
-          :action => 'readLink',
+          :action => 'dirExists',
           :location => '/bridge',
         }
       }
@@ -254,24 +254,23 @@ class LinuxSysNet
       parseList.each do |k, v|
         case (v[:action])
         when 'readLink'
-	#puts "Checking File.exists? #{device}#{v[:location]}"
-	  callFunction = 'readLink_' + k.to_s
+          #puts "Checking File.exists? #{device}#{v[:location]}"
+          callFunction = 'readLink_' + k.to_s
           if (self.respond_to?(callFunction))
             thisInterface[k] = self.send(callFunction, device, v);
           else
-		thisInterface[k] = readLink_Generic(device, v)
+            thisInterface[k] = readLink_Generic(device, v)
           end
         when 'parseFile'
-	  callFunction = 'parseFile_' + k.to_s
+          callFunction = 'parseFile_' + k.to_s
           if (self.respond_to?(callFunction))
             thisInterface[k] = self.send(callFunction, device, v);
           else
             #raise.MyException.new("Unhandled fileParse #{v[:action]}")
             puts "NYI #{callFunction}"
           end
-
         when 'parseDirectory'
-	  callFunction = 'parseDir_' + k.to_s
+          callFunction = 'parseDir_' + k.to_s
           if (self.respond_to?(callFunction))
             thisInterface[k] = self.send(callFunction, device, v);
           else
@@ -280,20 +279,22 @@ class LinuxSysNet
           end
         when 'checkFlagsSimple'
           puts "NYI"
-	when 'readLink'
-		callFunction = 'readLink_' + k.to_s
-		if (self.respond_to?(callFunction))
-			thisInterface[k] = self.send(callFunction, device, v)
-		else
-			puts "NYI #{callFunction}"
-		end
+        when 'readLink'
+          callFunction = 'readLink_' + k.to_s
+          if (self.respond_to?(callFunction))
+            thisInterface[k] = self.send(callFunction, device, v)
+          else
+            puts "NYI #{callFunction}"
+          end
+        when 'dirExists'
+          thisInterface[k] = dirExists_Generic(device, v)
         else
           puts "Unhandled Directive: #{v[:action]}"
           raise.MyException.new("Unhandled directive #{v[:action]}")
         end
       end
-	puts "New Collection Data:"
-	ap thisInterface
+      puts "New Collection Data:"
+      ap thisInterface
       # Check to see if there's a kernel module associated with this interface
       moduleLink = "#{device}/device/driver/module"
       moduleName = "none"
@@ -302,12 +303,12 @@ class LinuxSysNet
       end
 
       # Check to see if the device is in a bridge
-#      bridgeLink = "#{device}/brport/bridge"
-#      if (File.exists?(bridgeLink))
-#        bridgeDevice = File.basename(File.readlink(bridgeLink))
-#      else
-#        bridgeDevice = false
-#      end
+      #      bridgeLink = "#{device}/brport/bridge"
+      #      if (File.exists?(bridgeLink))
+      #        bridgeDevice = File.basename(File.readlink(bridgeLink))
+      #      else
+      #        bridgeDevice = false
+      #      end
 
       # Get the device flags and check them against our device flag list
       # Device list is a partial of "include/uapi/linux/if_arp.h"
@@ -353,14 +354,14 @@ class LinuxSysNet
       devInfo.merge!(dsInfo)
 
       # Create hash and add to array
-#	interfaceList << thisInterface
-#      interfaceList << {
-#        :deviceName => deviceName,
-#        :moduleName => moduleName,
-#        :devInfo => devInfo,
-#        :netType => netType,
-#        :flagString => flagString,
-#      }
+      #	interfaceList << thisInterface
+      #      interfaceList << {
+      #        :deviceName => deviceName,
+      #        :moduleName => moduleName,
+      #        :devInfo => devInfo,
+      #        :netType => netType,
+      #        :flagString => flagString,
+      #      }
     end
     interfaceList
   end
@@ -375,14 +376,14 @@ pciIDLocations = [ "/usr/share/hwdata/pci.ids", "/usr/share/misc/pci.ids" ]
 
 # Check to see if any of those work
 pciIDLocations.each do |val|
-	if (File.exists?(val))
-		lsnOpts[:pciLocation] = val
-		break
-	end
+  if (File.exists?(val))
+    lsnOpts[:pciLocation] = val
+    break
+  end
 end
 if (!lsnOpts.has_key?(:pciLocation))
-	puts "Couldn't find PCI-ID descriptor"
-	exit 0
+  puts "Couldn't find PCI-ID descriptor"
+  exit 0
 end
 nc = LinuxSysNet.new(lsnOpts)
 ap nc.getInterfaces()
