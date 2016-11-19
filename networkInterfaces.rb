@@ -282,7 +282,9 @@ class LinuxSysNet
               res.each do |k,v|
                 thisInterface[k] = v
               end
-            thisInterface[k] = self.send(callFunction, device, v);
+            else
+              thisInterface[k] = res
+            end
           else
             #raise.MyException.new("Unhandled fileParse #{v[:action]}")
             puts "NYI #{callFunction}"
