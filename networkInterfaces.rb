@@ -356,7 +356,7 @@ class LinuxSysNet
             puts "NYI #{callFunction}"
           end
         when 'checkFlagsSimple'
-          checkFlagsSimple(device, opts, thisInterface)
+          checkFlagsSimple(device, v, thisInterface)
         when 'readLink'
           callFunction = 'readLink_' + k.to_s
           if (self.respond_to?(callFunction))
