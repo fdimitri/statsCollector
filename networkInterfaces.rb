@@ -3,7 +3,6 @@ require 'awesome_print'
 
 class MyException < StandardError
   attr_accessor :object
-
   def initialize(message = nil, object = nil)
     super(message)
     self.object = objectend
@@ -197,7 +196,7 @@ class LinuxSysNet
       parseList.each do |k, v|
         case (v[:action])
         when 'readLink'
-	puts "Checking File.exists? #{device}#{v[:location]}"
+	#puts "Checking File.exists? #{device}#{v[:location]}"
           if (File.exists?(device + v[:location]))
             thisInterface[k] = File.basename(File.readlink(device + v[:location]))
           else
@@ -205,11 +204,12 @@ class LinuxSysNet
           end
 
         when 'parseFile'
-          if (self.respond_to?('parseFile_#{k}'))
-            thisInterface[k] = self.send("parseFile_#{k}", v);
+	  callFunction = 'parseFile_' + k.to_s
+          if (self.respond_to?(callFunction))
+            thisInterface[k] = self.send(callFunction, device, v);
           else
             #raise.MyException.new("Unhandled fileParse #{v[:action]}")
-            puts "NYI"
+            puts "NYI #{callFunction}"
           end
         when 'parseDirectory'
 	  callFunction = 'parseDir_' + k.to_s
@@ -217,8 +217,7 @@ class LinuxSysNet
             thisInterface[k] = self.send(callFunction, device, v);
           else
             #raise.MyException.new("Unhandled dirParse #{v[:action]}")
-            puts "NYI"
-	    puts YAML.dump(callFunction)
+            puts "NYI #{callFunction}"
           end
         when 'checkFlagsSimple'
           puts "NYI"
@@ -332,15 +331,22 @@ class LinuxSysNet
 
 end
 
-lsnOpts = {
-}
+# Define the options we'll pass to LinuxSysNet.new()
+lsnOpts = { }
 
+# Possible locations for pci.ids
 pciIDLocations = [ "/usr/share/hwdata/pci.ids", "/usr/share/misc/pci.ids" ]
+
+# Check to see if any of those work
 pciIDLocations.each do |val|
 	if (File.exists?(val))
 		lsnOpts[:pciLocation] = val
 		break
 	end
+end
+if (!lsnOpts.has_key?(:pciLocation))
+	puts "Couldn't find PCI-ID descriptor"
+	exit 0
 end
 nc = LinuxSysNet.new(lsnOpts)
 ap nc.getInterfaces()
