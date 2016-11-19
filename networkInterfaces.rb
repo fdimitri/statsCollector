@@ -315,14 +315,14 @@ class LinuxSysNet
         when 'parseFile'
           callFunction = 'parseFile_' + k.to_s
           if (self.respond_to?(callFunction))
-            res = self.send(callFunction, device, v);
+            res = self.send(callFunction, device, v)
             if (res.is_a?(Hash))
               if (res[:action] == :mergeEach)
-                res.each do |k,v|
+                res[:data].each do |k,v|
                   thisInterface[k] = v
                 end
               elsif (res[:action] == :mergeSimple)
-                thisInterface[k] = res
+                thisInterface[k] = res[:data]
               end
             else
               thisInterface[k] = res
