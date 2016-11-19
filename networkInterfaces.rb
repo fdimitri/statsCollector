@@ -3,7 +3,6 @@ require 'awesome_print'
 
 class MyException < StandardError
   attr_accessor :object
-
   def initialize(message = nil, object = nil)
     super(message)
     self.object = objectend
@@ -128,6 +127,159 @@ class LinuxSysNet
     return(rVal)
   end
 
+  def parseFile_vendorInfo(device, opts)
+    # Get PCI device Vendor + DeviceID if it exists
+    if (File.exists?("#{device}/device/subsystem"))
+      type = File.basename(File.readlink("#{device}/device/subsystem"))
+    else
+      type = "virt"
+    end
+
+    devInfo = {:bus => type}
+
+    if (type == "pci")
+      pciVendor = File.read("#{device}/device/vendor").strip
+      pciDevice = File.read("#{device}/device/device").strip
+      dsInfo = getPCIInfo(pciVendor, pciDevice)
+    elsif (type == "usb")
+      # Get USB device Vendor + DeviceID is NYI
+      dsInfo = {:vendor => "USB", :device => "USB"}
+    elsif (type == "virt")
+      dsInfo = {:vendor => "VIRT", :device => "VIRT"}
+    elsif (type == "virtio")
+      dsInfo = {:vendor => "VirtIO", :device => "VirtIO-NET"}
+      # We should check #{device}/device/driver/module/drivers/ for virtio
+    end
+    return({:action => :mergeSimple, :data => dsInfo})
+  end
+
+  def readLink_Generic(device, opts)
+    if (opts.has_key?(:default))
+      default = opts[:default]
+    else
+      default = 'Unknown'
+    end
+    if (File.exists?(device + opts[:location]))
+      k = File.basename(File.readlink(device + opts[:location]))
+    else
+      k = default
+    end
+    return(k)
+  end
+
+  def dirExists_Generic(device, opts)
+    if (File.exists?(device + opts[:location]))
+      return(true)
+    end
+    return(false)
+  end
+
+  def parseDir_xferStats(device, opts)
+    if (!(File.exists?(device + opts[:location])))
+      return(false)
+    end
+
+    # Initialize counters hash
+    # This is kind of a nasty way to define the hash, the lower functions
+    #  should actually create the lower level hashes as needed. On the other
+    #  hand, it does give us atleast an empty hash if there are no counters..
+    counters = {'RX' => { 'errors' => { }}, 'TX' => { 'errors' => { }}}
+
+    # Read all the statistics files and return them, do some trimming
+    Dir.glob(device + opts[:location] + '*') do |statsc|
+      newID = File.basename(statsc).gsub("_"," ")
+      inData = File.read(statsc).strip.to_i
+      priCategory = false
+      if (newID.match(/errors|dropped/))
+        #newID.gsub!("errors", "")
+        subCategory = 'errors'
+      end
+
+      if (newID.match(/rx\s/))
+        newID.gsub!("rx ","").capitalize!
+        priCategory = 'RX'
+      elsif (newID.match(/tx/))
+        newID.gsub!("tx ","").capitalize!
+        priCategory = 'TX'
+      else
+        counters[newID.capitalize!] = inData
+      end
+      if (priCategory)
+        if (subCategory)
+          counters[priCategory][subCategory][newID] = inData
+        else
+          counters[priCategory][newID] = inData
+        end
+      end
+    end
+    return(counters)
+  end
+
+  def readLink_moduleName(device, opts)
+    # Check to see if there's a kernel module associated with this interface
+    moduleLink = "#{device}/device/driver/module"
+    moduleName = "none"
+    if (File.exists?(moduleLink))
+      moduleName = File.basename(File.readlink(moduleLink))
+    end
+    return(moduleName)
+  end
+
+  def parseFile_MTU(device, opts)
+    if (!File.exists?(device + opts[:location]))
+      return(false)
+    end
+    return(File.read(device + opts[:location]).strip.to_i)
+  end
+
+  def parseFile_OperState(device, opts)
+    if (!File.exists?(device + opts[:location]))
+      return(false)
+    end
+    return(File.read(device + opts[:location]).strip)
+  end
+
+  def parseFile_LinkSpeed(device, opts)
+    if (!File.exists?(device + opts[:location]))
+      return(false)
+    end
+    begin
+      res = File.read(device + opts[:location]).strip
+    rescue
+      res = 'NA'
+    end
+    return(res)
+  end
+
+
+  def parseFile_netType(device, opts)
+    # Get the device flags and check them against our device flag list
+    # Device list is a partial of "include/uapi/linux/if_arp.h"
+    netType = @netTypes.key(File.read(device + opts[:location]).to_i)
+    flags = Integer(File.read(device + "/flags"))
+    flagList = []
+    @netDeviceFlags.each do |desc, flag|
+      if ((flags & flag) == flag)
+        flagList << desc
+      end
+    end
+    flagString = flagList.join(" ")
+    rData = {:flagString => flagString, :flagValue => flags, :netType => netType}
+    return({:action => :mergeEach, :data => rData})
+  end
+
+  def checkFlagsSimple(device, opts, interface)
+    opts[:flags].each do |f|
+      f.each do |k,v|
+        if (k == :forceTrueWithOr && (interface[:flagValue] & v == v))
+          return(true)
+        end
+      end
+    end
+    return(false)
+  end
+
+
   def getInterfaces
     # Check https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-class-net for more info
     sysDir = "/sys/class/net"
@@ -145,14 +297,19 @@ class LinuxSysNet
       # /dormant -- {0,1} 0 = not Dormant, 1 = Dormant, ie needs 802.1x auth
       thisInterface = {}
       parseList = {
+        :vendorInfo => {
+          :action => 'parseFile',
+          :location => '/device/vendor',
+          :default => false,
+        },
+        :driverName => {
+          :action => 'readLink',
+          :location => '/device/driver',
+          :default => false,
+        },
         :moduleName => {
           :action => 'readLink',
           :location => '/device/driver/module',
-          :default => false,
-        },
-        :bridgeParent => {
-          :action => 'readLink',
-          :location => '/brport/bridge',
           :default => false,
         },
         :netType => {
@@ -160,167 +317,125 @@ class LinuxSysNet
           :location => '/type',
           :default => false,
         },
+        :subSystem => {
+          :action => 'readLink',
+          :location => '/device/subsystem',
+          :default => 'Dvirtual',
+        },
+        :isLoopback => {
+          :action => 'checkFlagsSimple',
+          :flags => [
+            {:forceTrueWithOr => @netDeviceFlags["LOOPBACK"]},
+          ],
+          :default => false,
+        },
+        :isBridgeDevice => {
+          :action => 'dirExists',
+          :location => '/bridge',
+          :default => 'false',
+        },
+        :MTU => {
+          :action => 'parseFile',
+          :location => '/mtu',
+          :default => false,
+        },
+        :OperState => {
+          :action => 'parseFile',
+          :location => '/operstate',
+          :default => 'unknown',
+        },
+        :LinkSpeed => {
+          :action => 'parseFile',
+          :location => '/speed',
+          :default => 0,
+        },
+        :bridgeParent => {
+          :action => 'readLink',
+          :location => '/brport/bridge',
+          :default => false,
+        },
         :xferStats => {
           :action => 'parseDirectory',
           :location => '/statistics/',
         },
-        :subSystem => {
-          :action => 'readLink',
-          :location => '/device/subsystem',
-          :default => 'virtual',
-        },
-        :isLoopback => {
-          :action => 'checkFlagsSimple',
-          :flags => {
-            :forceTrueWithOr => @netDeviceFlags["LOOPBACK"]
-          },
-          :default => false,
-        },
-        :isBridgeDevice => {
-          :action => 'parseDirectory',
-          :location => '/bridge/',
-        }
       }
 
       parseList.each do |k, v|
         case (v[:action])
         when 'readLink'
-          if (File.exists?(device + v[:location]))
-            thisInterface[k] = File.basename(File.readlink(device + v[:location]))
+          #puts "Checking File.exists? #{device}#{v[:location]}"
+          callFunction = 'readLink_' + k.to_s
+          if (self.respond_to?(callFunction))
+            thisInterface[k] = self.send(callFunction, device, v);
           else
-            thisInterface[k] = v[:default]
+            thisInterface[k] = readLink_Generic(device, v)
           end
-
         when 'parseFile'
-          if (self.respond_to?('parseFile_#{k}'))
-            thisInterface[k] = self.send("parseFile_#{k}", v);
+          callFunction = 'parseFile_' + k.to_s
+          if (self.respond_to?(callFunction))
+            res = self.send(callFunction, device, v)
+            if (res.is_a?(Hash))
+              if (res[:action] == :mergeEach)
+                res[:data].each do |k,v|
+                  thisInterface[k] = v
+                end
+              elsif (res[:action] == :mergeSimple)
+                thisInterface[k] = res[:data]
+              end
+            else
+              thisInterface[k] = res
+            end
           else
             #raise.MyException.new("Unhandled fileParse #{v[:action]}")
-            puts "NYI"
+            puts "NYI #{callFunction}"
           end
         when 'parseDirectory'
-          if (self.respond_to?('parseDir_#{k}'))
-            thisInterface[k] = self.send("parseDir_#{k}", v);
+          callFunction = 'parseDir_' + k.to_s
+          if (self.respond_to?(callFunction))
+            thisInterface[k] = self.send(callFunction, device, v);
           else
-            #raise.MyException.new("Unhandled fileParse #{v[:action]}")
-            puts "NYI"
+            #raise.MyException.new("Unhandled dirParse #{v[:action]}")
+            puts "NYI #{callFunction}"
           end
         when 'checkFlagsSimple'
-          puts "NYI"
+          res = checkFlagsSimple(device, v, thisInterface)
+          thisInterface[k] = res
+        when 'readLink'
+          callFunction = 'readLink_' + k.to_s
+          if (self.respond_to?(callFunction))
+            thisInterface[k] = self.send(callFunction, device, v)
+          else
+            puts "NYI #{callFunction}"
+          end
+        when 'dirExists'
+          thisInterface[k] = dirExists_Generic(device, v)
         else
           puts "Unhandled Directive: #{v[:action]}"
           raise.MyException.new("Unhandled directive #{v[:action]}")
-
-        end
-
-
-      end
-      # Check to see if there's a kernel module associated with this interface
-      moduleLink = "#{device}/device/driver/module"
-      moduleName = "none"
-      if (File.exists?(moduleLink))
-        moduleName = File.basename(File.readlink(moduleLink))
-      end
-
-      # Check to see if the device is in a bridge
-      bridgeLink = "#{device}/brport/bridge"
-      if (File.exists?(bridgeLink))
-        bridgeDevice = File.basename(File.readlink(bridgeLink))
-      else
-        bridgeDevice = false
-      end
-
-      # Get the device flags and check them against our device flag list
-      # Device list is a partial of "include/uapi/linux/if_arp.h"
-      netType = @netTypes.key(File.read("#{device}/type").to_i)
-      flags = Integer(File.read("#{device}/flags"))
-      flagList = []
-      @netDeviceFlags.each do |desc, flag|
-        if ((flags & flag) == flag)
-          flagList << desc
         end
       end
-      flagString = flagList.join(" ")
-
-      # This is kind of a nasty way to define the hash, the lower functions
-      #  should actually create the lower level hashes as needed. On the other
-      #  hand, it does give us atleast an empty hash if there are no counters..
-      counters = {'RX' => { 'errors' => { }}, 'TX' => { 'errors' => { }}}
-
-      # Read all the statistics files and return them, do some trimming
-      Dir.glob("#{device}/statistics/*") do |statsc|
-        newID = File.basename(statsc).gsub("_"," ")
-        inData = File.read(statsc).strip.to_i
-        priCategory = false
-        if (newID.match(/errors|dropped/))
-          #newID.gsub!("errors", "")
-          subCategory = 'errors'
-        end
-
-        if (newID.match(/rx\s/))
-          newID.gsub!("rx ","").capitalize!
-          priCategory = 'RX'
-        elsif (newID.match(/tx/))
-          newID.gsub!("tx ","").capitalize!
-          priCategory = 'TX'
-        else
-          counters[newID.capitalize!] = inData
-        end
-        if (priCategory)
-          if (subCategory)
-            counters[priCategory][subCategory][newID] = inData
-          else
-            counters[priCategory][newID] = inData
-          end
-        end
-      end
-
-      # Get PCI device Vendor + DeviceID if it exists
-      if (File.exists?("#{device}/device/subsystem"))
-        type = File.basename(File.readlink("#{device}/device/subsystem"))
-      else
-        type = "virt"
-      end
-      # Get USB device Vendor + DeviceID..
-      # NYI
-
-      devInfo = {:bus => type}
-
-      if (type == "pci")
-        pciVendor = File.read("#{device}/device/vendor").strip
-        pciDevice = File.read("#{device}/device/device").strip
-        dsInfo = getPCIInfo(pciVendor, pciDevice)
-      elsif (type == "usb")
-        dsInfo = {:vendor => "USB", :device => "USB"}
-      elsif (type == "virt")
-        dsInfo = {:vendor => "VIRT", :device => "VIRT"}
-      elsif (type == "virtio")
-        dsInfo = {:vendor => "VirtIO", :device => "VirtIO-NET"}
-        # We should check #{device}/device/driver/module/drivers/ for virtio
-      end
-
-
-      devInfo.merge!(dsInfo)
-
-      # Create hash and add to array
-      interfaceList << {
-        :deviceName => deviceName,
-        :moduleName => moduleName,
-        :devInfo => devInfo,
-        :netType => netType,
-        :flagString => flagString,
-        :bridgeDevice => bridgeDevice,
-        :counters => counters,
-      }
+      interfaceList << {deviceName => thisInterface}
     end
-    interfaceList
+    return(interfaceList)
   end
-
 end
 
+# Define the options we'll pass to LinuxSysNet.new()
+lsnOpts = { }
 
-lsnOpts = {
-  :pciLocation => "/usr/share/misc/pci.ids"
-}
+# Possible locations for pci.ids
+pciIDLocations = [ "/usr/share/hwdata/pci.ids", "/usr/share/misc/pci.ids" ]
+
+# Check to see if any of those work
+pciIDLocations.each do |val|
+  if (File.exists?(val))
+    lsnOpts[:pciLocation] = val
+    break
+  end
+end
+if (!lsnOpts.has_key?(:pciLocation))
+  puts "Couldn't find PCI-ID descriptor"
+  exit 0
+end
 nc = LinuxSysNet.new(lsnOpts)
 ap nc.getInterfaces()
