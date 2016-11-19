@@ -153,14 +153,6 @@ class LinuxSysNet
     return({:action => :mergeSimple, :data => dsInfo})
   end
 
-  # Check to see if the device is in a bridge
-  #      bridgeLink = "#{device}/brport/bridge"
-  #      if (File.exists?(bridgeLink))
-  #        bridgeDevice = File.basename(File.readlink(bridgeLink))
-  #      else
-  #        bridgeDevice = false
-  #      end
-
   def readLink_Generic(device, opts)
     if (opts.has_key?(:default))
       default = opts[:default]
@@ -236,8 +228,8 @@ class LinuxSysNet
   def parseFile_netType(device, opts)
     # Get the device flags and check them against our device flag list
     # Device list is a partial of "include/uapi/linux/if_arp.h"
-    netType = @netTypes.key(File.read("#{device}/#{opts[:location]}").to_i)
-    flags = Integer(File.read("#{device}/flags"))
+    netType = @netTypes.key(File.read(device + opts[:location]).to_i)
+    flags = Integer(File.read(device + "/flags"))
     flagList = []
     @netDeviceFlags.each do |desc, flag|
       if ((flags & flag) == flag)
@@ -245,7 +237,7 @@ class LinuxSysNet
       end
     end
     flagString = flagList.join(" ")
-    rData = {:flagString => flagString, :flagValue => flags}
+    rData = {:flagString => flagString, :flagValue => flags, :netType => netType}
     return({:action => :mergeEach, :data => rData})
   end
 
