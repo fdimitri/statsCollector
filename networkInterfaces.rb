@@ -225,6 +225,13 @@ class LinuxSysNet
     return(moduleName)
   end
 
+  def parseFile_MTU(device, opts)
+    if (!File.exists?(device + opts[:location])))
+      return(false)
+    end
+    return(File.read(device + opts[:location]).to_i)
+  end
+
   def parseFile_netType(device, opts)
     # Get the device flags and check them against our device flag list
     # Device list is a partial of "include/uapi/linux/if_arp.h"
@@ -315,7 +322,12 @@ class LinuxSysNet
           :action => 'dirExists',
           :location => '/bridge',
           :default => 'false',
-        }
+        },
+        :MTU => {
+          :action => 'parseFile',
+          :location => '/mtu',
+          :default => false,
+        },
       }
 
       parseList.each do |k, v|
