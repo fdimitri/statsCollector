@@ -385,7 +385,7 @@ class LinuxSysNet
       #        :flagString => flagString,
       #      }
     end
-    interfaceList
+    interfaceList << {device => thisInterface}
   end
 end
 
