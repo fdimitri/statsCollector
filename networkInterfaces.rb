@@ -241,15 +241,14 @@ class LinuxSysNet
     return({:action => :mergeEach, :data => rData})
   end
 
-  #def readLink_bridgeParent(device, opts)
-    #bridgeLink = device + opts[:location]
-    #if (File.exists?(bridgeLink))
-      #bridgeDevice = File.basename(File.readlink(bridgeLink))
-    #else
-      #bridgeDevice = false
-    #end
-    #return bridgeDevice
-  #end
+  def checkFlagsSimple(device, opts, interface)
+    opts[:flags].each do |k,v|
+      if (k == :forceTrueWithOr && (interface[:flagValue] & v == v))
+        return(true)
+      end
+    end
+    return(false)
+  end
 
 
   def getInterfaces
@@ -301,7 +300,7 @@ class LinuxSysNet
         :subSystem => {
           :action => 'readLink',
           :location => '/device/subsystem',
-          :default => 'virtual',
+          :default => 'Dvirtual',
         },
         :isLoopback => {
           :action => 'checkFlagsSimple',
@@ -355,7 +354,7 @@ class LinuxSysNet
             puts "NYI #{callFunction}"
           end
         when 'checkFlagsSimple'
-          puts "NYI"
+          checkFlagsSimple(device, opts, thisInterface)
         when 'readLink'
           callFunction = 'readLink_' + k.to_s
           if (self.respond_to?(callFunction))
@@ -370,23 +369,9 @@ class LinuxSysNet
           raise.MyException.new("Unhandled directive #{v[:action]}")
         end
       end
-
-
-
-
-
-      # Create hash and add to array
-      #	interfaceList << thisInterface
-      #      interfaceList << {
-      #        :deviceName => deviceName,
-      #        :moduleName => moduleName,
-      #        :devInfo => devInfo,
-      #        :netType => netType,
-      #        :flagString => flagString,
-      #      }
       interfaceList << {deviceName => thisInterface}
     end
-    interfaceList
+    return(interfaceList)
   end
 end
 
