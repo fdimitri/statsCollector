@@ -126,13 +126,70 @@ class LinuxSysNet
     end
     return(rVal)
   end
+	def readLink_Generic(device, opts)
+          if (File.exists?(device + opts[:location]))
+            k = File.basename(File.readlink(device + opts[:location]))
+          else
+            k = opts[:default]
+          end
+	  return k
+	end
 
 	def parseDir_isBridgeDevice(device, opts) 
 		if (File.exists?(device + opts[:location]))
 			return true
 		end
-		return false	
+		return false
 	end
+
+	def parseDir_xferStats(device, opts)
+		if (!(File.exists?(device + opts[:location])))
+			return false
+		end
+      counters = {'RX' => { 'errors' => { }}, 'TX' => { 'errors' => { }}}
+
+      # Read all the statistics files and return them, do some trimming
+      Dir.glob(device + opts[:location] + '*') do |statsc|
+        newID = File.basename(statsc).gsub("_"," ")
+        inData = File.read(statsc).strip.to_i
+        priCategory = false
+        if (newID.match(/errors|dropped/))
+          #newID.gsub!("errors", "")
+          subCategory = 'errors'
+        end
+
+        if (newID.match(/rx\s/))
+          newID.gsub!("rx ","").capitalize!
+          priCategory = 'RX'
+        elsif (newID.match(/tx/))
+          newID.gsub!("tx ","").capitalize!
+          priCategory = 'TX'
+        else
+          counters[newID.capitalize!] = inData
+        end
+        if (priCategory)
+          if (subCategory)
+            counters[priCategory][subCategory][newID] = inData
+          else
+            counters[priCategory][newID] = inData
+          end
+        end
+      end
+	return counters
+				
+	end
+
+	def readLink_bridgeParent(device, opts)
+
+		bridgeLink = device + opts[:location]
+		if (File.exists?(bridgeLink))
+			bridgeDevice = File.basename(File.readlink(bridgeLink))
+		else
+			bridgeDevice = false
+		end
+		return bridgeDevice
+	end
+			
 
   def getInterfaces
     # Check https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-class-net for more info
@@ -167,6 +224,7 @@ class LinuxSysNet
           :default => false,
         },
         :netType => {
+          :device => "VIRT",
           :action => 'parseFile',
           :location => '/type',
           :default => false,
@@ -188,8 +246,8 @@ class LinuxSysNet
           :default => false,
         },
         :isBridgeDevice => {
-          :action => 'parseDirectory',
-          :location => '/bridge/',
+          :action => 'readLink',
+          :location => '/bridge',
         }
       }
 
@@ -197,12 +255,12 @@ class LinuxSysNet
         case (v[:action])
         when 'readLink'
 	#puts "Checking File.exists? #{device}#{v[:location]}"
-          if (File.exists?(device + v[:location]))
-            thisInterface[k] = File.basename(File.readlink(device + v[:location]))
+	  callFunction = 'readLink_' + k.to_s
+          if (self.respond_to?(callFunction))
+            thisInterface[k] = self.send(callFunction, device, v);
           else
-            thisInterface[k] = v[:default]
+		thisInterface[k] = readLink_Generic(device, v)
           end
-
         when 'parseFile'
 	  callFunction = 'parseFile_' + k.to_s
           if (self.respond_to?(callFunction))
@@ -211,6 +269,7 @@ class LinuxSysNet
             #raise.MyException.new("Unhandled fileParse #{v[:action]}")
             puts "NYI #{callFunction}"
           end
+
         when 'parseDirectory'
 	  callFunction = 'parseDir_' + k.to_s
           if (self.respond_to?(callFunction))
@@ -221,6 +280,13 @@ class LinuxSysNet
           end
         when 'checkFlagsSimple'
           puts "NYI"
+	when 'readLink'
+		callFunction = 'readLink_' + k.to_s
+		if (self.respond_to?(callFunction))
+			thisInterface[k] = self.send(callFunction, device, v)
+		else
+			puts "NYI #{callFunction}"
+		end
         else
           puts "Unhandled Directive: #{v[:action]}"
           raise.MyException.new("Unhandled directive #{v[:action]}")
@@ -236,12 +302,12 @@ class LinuxSysNet
       end
 
       # Check to see if the device is in a bridge
-      bridgeLink = "#{device}/brport/bridge"
-      if (File.exists?(bridgeLink))
-        bridgeDevice = File.basename(File.readlink(bridgeLink))
-      else
-        bridgeDevice = false
-      end
+#      bridgeLink = "#{device}/brport/bridge"
+#      if (File.exists?(bridgeLink))
+#        bridgeDevice = File.basename(File.readlink(bridgeLink))
+#      else
+#        bridgeDevice = false
+#      end
 
       # Get the device flags and check them against our device flag list
       # Device list is a partial of "include/uapi/linux/if_arp.h"
@@ -258,35 +324,6 @@ class LinuxSysNet
       # This is kind of a nasty way to define the hash, the lower functions
       #  should actually create the lower level hashes as needed. On the other
       #  hand, it does give us atleast an empty hash if there are no counters..
-      counters = {'RX' => { 'errors' => { }}, 'TX' => { 'errors' => { }}}
-
-      # Read all the statistics files and return them, do some trimming
-      Dir.glob("#{device}/statistics/*") do |statsc|
-        newID = File.basename(statsc).gsub("_"," ")
-        inData = File.read(statsc).strip.to_i
-        priCategory = false
-        if (newID.match(/errors|dropped/))
-          #newID.gsub!("errors", "")
-          subCategory = 'errors'
-        end
-
-        if (newID.match(/rx\s/))
-          newID.gsub!("rx ","").capitalize!
-          priCategory = 'RX'
-        elsif (newID.match(/tx/))
-          newID.gsub!("tx ","").capitalize!
-          priCategory = 'TX'
-        else
-          counters[newID.capitalize!] = inData
-        end
-        if (priCategory)
-          if (subCategory)
-            counters[priCategory][subCategory][newID] = inData
-          else
-            counters[priCategory][newID] = inData
-          end
-        end
-      end
 
       # Get PCI device Vendor + DeviceID if it exists
       if (File.exists?("#{device}/device/subsystem"))
@@ -316,15 +353,14 @@ class LinuxSysNet
       devInfo.merge!(dsInfo)
 
       # Create hash and add to array
-      interfaceList << {
-        :deviceName => deviceName,
-        :moduleName => moduleName,
-        :devInfo => devInfo,
-        :netType => netType,
-        :flagString => flagString,
-        :bridgeDevice => bridgeDevice,
-        :counters => counters,
-      }
+#	interfaceList << thisInterface
+#      interfaceList << {
+#        :deviceName => deviceName,
+#        :moduleName => moduleName,
+#        :devInfo => devInfo,
+#        :netType => netType,
+#        :flagString => flagString,
+#      }
     end
     interfaceList
   end
