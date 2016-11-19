@@ -343,7 +343,7 @@ class LinuxSysNet
           :action => 'parseFile',
           :location => '/speed',
           :default => 0,
-        }
+        },
         :bridgeParent => {
           :action => 'readLink',
           :location => '/brport/bridge',
