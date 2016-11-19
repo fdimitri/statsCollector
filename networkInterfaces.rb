@@ -226,7 +226,7 @@ class LinuxSysNet
   end
 
   def parseFile_MTU(device, opts)
-    if (!File.exists?(device + opts[:location])))
+    if (!File.exists?(device + opts[:location]))
       return(false)
     end
     return(File.read(device + opts[:location]).to_i)
